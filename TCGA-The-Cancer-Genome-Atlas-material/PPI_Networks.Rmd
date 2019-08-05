@@ -1,0 +1,312 @@
+---
+title: "Gene-centric, Protein-Protein Interaction, and network analysis"
+author: "Mikhail Dozmorov"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    theme: united
+    toc: yes
+bibliography: /Users/mdozmorov/Documents/Work/VCU_grants/1_Dozmorov//networks.bib
+---
+
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+# Set up the environment
+library(knitr)
+opts_chunk$set(cache.path='cache/', fig.path='img/', cache=F, tidy=T, fig.keep='high', echo=F, dpi=100, warnings=F, message=F, comment=NA, warning=F, results='as.is', fig.width = 10, fig.height = 6) #out.width=700, 
+library(pander)
+panderOptions('table.split.table', Inf)
+set.seed(1)
+library(dplyr)
+options(stringsAsFactors = FALSE)
+```
+
+## Libraries
+
+```{r}
+library(aracne.networks)
+library(networkD3)
+library(igraph)
+```
+
+## Settings
+
+```{r}
+selected_genes <- c("SIAH1")
+max_to_plot <- 60 # Maximum number of PPI links to plot
+```
+
+## PPI databases 
+
+- The tables contain PPI interactions for the selected gene `r selected_genes`.
+- Search box in the tables to search for for interactions of interest. E.g., search for "cxcl8" to find an interaction of `r selected_genes` with IL-8
+- Two networks, if plotted, are the same. One is dynamic (drag nodes, zoom with mouse wheel), another is static.
+- If the selected gene `r selected_genes` has more than `r max_to_plot` connections, only the table is outputted, the networks are not plotted.
+
+### `STRING`, http://string-db.org/
+
+STRING v10: protein-protein interaction networks, integrated over the tree of life. https://www.ncbi.nlm.nih.gov/pubmed/25352553
+
+wget https://string-db.org/download/protein.links.v10.5/9606.protein.links.v10.5.txt.gz # 05/29/2017
+
+Total number of interactions: 7,083,920
+
+"protein1", "protein2", "combined_score"
+ 
+wget https://string-db.org/download/protein.actions.v10.5/9606.protein.actions.v10.5.txt.gz # 05/29/2017 # A subset of directional interactions
+
+Total number of interactions: 1,862,289 
+
+- Column 1: "item_id_a", e.g., 9606.ENSP00000000233
+- Column 2: "item_id_b", e.g., 9606.ENSP00000005257
+- Column 3: "mode"
+    - 107288 activation
+    - 326100 binding
+    - 506918 catalysis
+    - 23488 expression
+    - 23454 inhibition
+    - 29080 ptmod
+    - 845960 reaction
+- Column 4: "action"
+    - 107296 activation
+    - 35026 inhibition
+- Colum 5: "is_directional"
+    - 1260194 t
+- Column 6: "a_is_acting"
+    - 1232191 f
+    - 630097 t
+- Column 7: "score", from 150 to 900. Median 900.
+
+
+```{r eval = TRUE}
+# STRING data
+load(file = "/Users/mdozmorov/Documents/Work/Teaching/Kellen_Cresswell/disease-coherence/data/9606.protein.links.v10.5.rda")
+
+selected <- my_adj_list[ (my_adj_list$from %in% selected_genes) | (my_adj_list$to %in% selected_genes), , drop = FALSE ]
+selected <- selected[complete.cases(selected), ]
+print(paste0("Number of proteins interacting witn ", selected_genes, ": ", nrow(selected)))
+DT::datatable(selected)
+```
+```{r}
+if (nrow(selected) <= max_to_plot) {
+  # NetworkD3 plot
+  simpleNetwork(selected, Source = "from", Target = "to", fontSize = 10, linkColour = "black", nodeColour = "blue", opacity = 0.8, zoom = TRUE)
+}
+```
+```{r}
+if (nrow(selected) <= max_to_plot) {
+  # igraph plot
+  net <- graph_from_data_frame(d = selected, directed = TRUE)
+  plot(net, edge.arrow.size=.6, vertex.label.family = "Arial")
+}
+```
+
+### `I2D`, http://ophid.utoronto.ca/ophidv2.204/index.jsp
+
+I2D (Interologous Interaction Database) is an on-line database of known and predicted mammalian and eukaryotic protein-protein interactions
+
+```{r}
+load(file = "/Users/mdozmorov/Documents/Work/Teaching/Kellen_Cresswell/disease-coherence/data/i2d.2_9.Public.HUMAN.tab.rda")
+
+selected <- my_adj_list[ (my_adj_list$from %in% selected_genes) | (my_adj_list$to %in% selected_genes), , drop = FALSE ]
+selected <- selected[complete.cases(selected), ]
+print(paste0("Number of proteins interacting witn ", selected_genes, ": ", nrow(selected)))
+DT::datatable(selected)
+```
+```{r}
+if (nrow(selected) <= max_to_plot) {
+  # NetworkD3 plot
+  simpleNetwork(selected, Source = "from", Target = "to", fontSize = 10, linkColour = "black", nodeColour = "blue", opacity = 0.8, zoom = TRUE)
+}
+```
+```{r}
+if (nrow(selected) <= max_to_plot) {
+  # igraph plot
+  net <- graph_from_data_frame(d = selected, directed = TRUE)
+  plot(net, edge.arrow.size=.6, vertex.label.family = "Arial")
+}
+```
+
+### `Biogrid`, https://thebiogrid.org/
+
+BioGRID is an interaction repository with data compiled through comprehensive curation efforts.
+
+```{r eval = TRUE}
+load(file = "/Users/mdozmorov/Documents/Work/Teaching/Kellen_Cresswell/disease-coherence/data/biogrid.rda")
+
+selected <- my_adj_list[ (my_adj_list$from %in% selected_genes) | (my_adj_list$to %in% selected_genes), , drop = FALSE ]
+selected <- selected[complete.cases(selected), ]
+print(paste0("Number of proteins interacting witn ", selected_genes, ": ", nrow(selected)))
+DT::datatable(selected)
+```
+```{r}
+if (nrow(selected) <= max_to_plot) {
+  # NetworkD3 plot
+  simpleNetwork(selected, Source = "from", Target = "to", fontSize = 10, linkColour = "black", nodeColour = "blue", opacity = 0.8, zoom = TRUE)
+}
+```
+```{r}
+if (nrow(selected) <= max_to_plot) {
+  # igraph plot
+  net <- graph_from_data_frame(d = selected, directed = TRUE)
+  plot(net, edge.arrow.size=.6, vertex.label.family = "Arial")
+}
+```
+
+# Gene- and PPI databases
+
+## Online only
+
+### `UCSC gene interactions`, https://genome.ucsc.edu/cgi-bin/hgGeneGraph
+
+Gene interactions and pathways from curated databases and text-mining - search one gene and play with the network
+
+### `Literome` project, http://literome.azurewebsites.net/
+
+Pairwise gene-gene and gene-phenotype search via literature mining
+
+### `GeNet`, http://apps.broadinstitute.org/genets
+
+GeNets: Broad Institute Web Platform for Genome Networks
+
+### `Prioritizer`, http://www.prioritizer.nl, http://129.125.135.180:8080/GeneNetwork/
+
+Predicting gene functions (GO, KEGG, Biocarta, Reactome), tissue-specific expression, network view. 
+
+Their algorithm ranks a set of candidate disease-causing genes in multiple susceptibility loci for further sequence or association analysis. To this end, they constructed a functional human gene network based on known molecular interactions as well as computationally predicted functional relations. The network was used to rank the candidate genes on the basis of their interactions, assuming that the causative genes for any one disorder will be involved in only a few distinct biological pathways. This assumption implies that genes from different susceptibility loci would cluster, resulting in shorter network distances between disease genes than the random expectation.
+
+
+## Online and download
+
+### `HumanBase`, data-driven predictions of gene expression, function, regulation, and interactions in human, http://hb.flatironinstitute.org/
+
+Search for a gene, or multiple genes. Output: tissue-specific networks and the associated biological processes, tissue expression, gene interaction details, associated diseases.
+
+### `RegNetwork`, Regulatory Network Repository, http://www.regnetworkweb.org
+
+RegNetwork is a database of transcriptional and posttranscriptional regulatory networks in human and mouse. TF and miRNA are two major regulators controlling gene expression. RegNetwork collects the knowledge-based regulatory relationships, as well as some potentially regulatory relationships between the two regulators and targets. It provides a platform of depositing the known and predicted gene regulations in the transcriptional and posttranscriptional levels simultaneously. The knowledge-derived regulatory networks is expected to be greatly beneficial for identifying critical regulatory programs in various context-specific conditions.
+
+Gene-centric interpretation of regulator-gene relationships. Rich selection of databases, http://www.regnetworkweb.org/source.jsp
+
+
+### `ARCHS4`, http://amp.pharm.mssm.edu/archs4/index.html
+
+ARCHS4: Massive Mining of Publicly Available RNA-seq Data from Human and Mouse. ARCHS4 provides access to gene counts from HiSeq 2000 and HiSeq 2500 platforms for human and mouse experiments from GEO and SRA. The website enables downloading of the data in H5 format for programmatic access as well as a 3-dimensional view of the sample and gene spaces. 
+
+Gene expression, Pearson correlations, HDF5 files download, http://amp.pharm.mssm.edu/archs4/download.html
+
+- Lachmann, Alexander, Denis Torre, Alexandra B. Keenan, Kathleen M. Jagodnik, Hyojin J. Lee, Moshe C. Silverstein, Lily Wang, and Avi Ma’ayan. “Massive Mining of Publicly Available RNA-Seq Data from Human and Mouse,” September 15, 2017. https://doi.org/10.1101/189092. https://www.biorxiv.org/content/early/2017/09/15/189092
+
+
+
+### `SIGNOR`, http://signor.uniroma2.it/
+
+The SIGnaling Network Open Resource, causal interactions. Every interaction in SIGNOR is annotated with details about: (i) the sign of the interaction: a regulator might up- or down-regulate the target by modu- lating its activity or quantity; (ii) the mechanism underlying the regulatory interaction (e.g. phosphorylation, ubiquiti- nation, etc.) and (iii) a reference (usually the PubMedID) and a sentence (extracted from the cited article) supporting the interaction. 
+
+Also, `metha`, browser of PPIs, http://mentha.uniroma2.it/index.php
+
+### `CDT`, http://ctdbase.org/
+
+Comparative Toxicogenomics Database. Disease-associated genes, chemicals, their interactions. Downloadable data
+
+### `BioPlex`, http://bioplex.hms.harvard.edu/index.php
+
+The largest currently available interaction map based on the affinity purification – mass spectrometry approach. ~5,000 proteins, ~50,000 interactions
+
+### `ConsesusPathDb`, http://cpdb.molgen.mpg.de/CPDB
+
+The database integrating pathways and PPIs from multiple databases. Several analyses: "interactions of molecules/pathways" - search for pathways containing a gene; "shortest interaction paths" - find all evidences supporting shortest connection between two genes; "over-representation analysis" and "enrichment analysis" - gene set analysis using any or all databases; "induced network modules" - build a network from a list of genes
+
+Ralf Herwig et al., “Analyzing and Interpreting Genome Data at the Network Level with ConsensusPathDB,” Nature Protocols 11, no. 10 (September 8, 2016): 1889–1907, doi:10.1038/nprot.2016.117. http://www.nature.com.proxy.library.vcu.edu/nprot/journal/v11/n10/full/nprot.2016.117.html
+
+### `CORUM`, http://mips.helmholtz-muenchen.de/corum/#
+
+The comprehensive resource of mammalian protein complex. High-quality PPIs. Last updated: 2017. Reference: [@Ruepp:2010aa]
+
+### `MINT`, http://mint.bio.uniroma2.it/
+
+MINT, the Molecular INTeraction database. MINT focuses on experimentally verified protein-protein interactions mined from the scientific literature by expert curators. Starting September 2013, MINT uses the IntAct database. Data manually curated by the MINT curators can now also be accessed from the IntAct homepage at the EBI.
+
+### `IntAct`, https://www.ebi.ac.uk/intact/
+
+IntAct Molecular Interaction Database. IntAct provides a freely available, open source database system and analysis tools for molecular interaction data. All interactions are derived from literature curation or direct user submissions and are freely available.
+
+### `InBio`, https://www.intomics.com/inbio/map/#home
+
+- Li, Taibo, Rasmus Wernersson, Rasmus B. Hansen, Heiko Horn, Johnathan Mercer, Greg Slodkowicz, Christopher T. Workman, et al. “A Scored Human Protein-Protein Interaction Network to Catalyze Genomic Interpretation.” Nature Methods 14, no. 1 (2017): 61–64. https://doi.org/10.1038/nmeth.4083.
+
+InBio Map is a high coverage, high quality, convenient and transparent platform for investigating and visualizing protein-protein interactions. 
+
+- Visualization: http://apps.broadinstitute.org/genets#InWeb_InBiomap
+- Data: https://www.intomics.com/inbio/map/#downloads
+
+Column description: 1: uniprotkb:A0A5B9   2: uniprotkb:P01892   3: uniprotkb:TRBC2_HUMAN   4: uniprotkb:1A02_HUMAN|ensembl:ENSG00000227715|ensembl:ENSG00000235657|ensembl:ENST00000457879|ensembl:ENST00000547271|ensembl:ENST00000547522|ensembl:ENSP00000403575|ensembl:ENSP00000447962|ensembl:ENSP00000448077   5: uniprotkb:TRBC2(gene name)|uniprotkb:TRBC2(display_short)   6: uniprotkb:HLA-A(gene name)|uniprotkb:HLA-A(display_short)   7: psi-mi:"MI:0045"(experimental interaction detection)   8: -   9: -   10: taxid:9606(Homo sapiens)   11: taxid:9606(Homo sapiens)   12 -   13: psi-mi:"MI:0461"(interaction database)   14: -   15: 0.417|0.458   16: -. More details in Supplementary Note 10, https://media.nature.com/original/nature-assets/nmeth/journal/v14/n1/extref/nmeth.4083-S1.pdf
+
+### `HIPPIE`, http://cbdm-01.zdv.uni-mainz.de/~mschaefer/hippie/index.php
+
+Human Integrated Protein-Protein Interaction rEference. Scored interactions, score > 0.72 corresponds to the top 25% scoring interactions
+
+### `HuRI`, http://interactome.baderlab.org/
+
+Human Reference Protein Interactome Project
+
+One of the long-term goals at the Center for Cancer Systems Biology (CCSB) is to generate a first reference map of the human protein-protein interactome network. To reach this target, we are identifying binary protein-protein interactions (PPIs) by systematically interrogating all pairwise combinations of predicted human protein-coding genes using proteome-scale technologies. Our approach to map high-quality PPIs is based on using yeast two-hybrid (Y2H) as the primary screening method followed by validation of subsets of PPIs in multiple orthogonal assays for binary PPI detection.
+
+### `PINA`, http://omics.bjcancer.org/pina/home.do
+
+Protein Interaction Network Analysis (PINA), which collected and annotated six other public PPI databases (MINT, IntAct, DIP, BioGRID, HPRD, and MIPS/MPact).
+
+### `RegNetwork`, http://www.regnetworkweb.org/home.jsp
+
+RegNetwork is a data repository of five-type transcriptional and posttranscriptional regulatory relationships for human and mouse:
+
+1. TF→TF
+2. TF→gene
+3. TF→miRNA
+4. miRNA→TF
+5. miRNA→gene
+
+RegNetwork integrates the curated regulations in various databases and the potential regulations inferred based on the transcription factor binding sites (TFBSs). Transcription factor (TF) and microRNA (miRNA) are central regulators in gene regulations. They function in the transcriptional and posttranscriptional levels respectively. Recently, more and more regulatory relationships in databases and literatures are available. It will greatly valuable for studying gene regulatory systems by integrating the prior knowledge of the transcriptional regulations between TF and target genes, and the posttranscriptional regulations between miRNA and targets. The conservation knowledge of transcription factor binding site (TFBS) can also be implemented to couple the potential regulatory relationships between regulators and their targets.
+
+### `HumanNet`, http://www.functionalnet.org/humannet/
+
+HumanNet is a probabilistic functional gene network of 18,714 validated protein-encoding genes of Homo sapiens (by NCBI March 2007), constructed by a modified Bayesian integration of 21 types of 'omics' data from multiple organisms, with each data type weighted according to how well it links genes that are known to function together in H. sapiens. Each interaction in HumanNet has an associated log-likelihood score (LLS) that measures the probability of an interaction representing a true functional linkage between two genes.
+
+Find new members of a pathway, with or without graph. Infer GO functions of a network. EntrezIDs. ~500,000 interactions to download.
+
+
+## Download only
+
+### `iRefIndex`, http://irefindex.org/wiki/index.php?title=iRefIndex
+
+iRefIndex provides an index of protein interactions available in a number of primary interaction databases including BIND, BioGRID, CORUM, DIP, HPRD, InnateDB, IntAct, MatrixDB, MINT, MPact, MPIDB and MPPI. Download in tab-delimited format. `iRefR` package for R access, http://irefindex.org/wiki/index.php?title=iRefR
+
+
+### `HINT`, http://hint.yulab.org/download/
+
+The set of all protein-protein interactions for the organ- isms was downloaded from the public databases – Bio- Grid [9], DIP [10], HPRD [11], IntAct [12], iRefWeb [13], MINT [14], MIPS [15] and VisAnt [16].
+
+Homo Sapiens
+
+- Binary (59,128) 
+- Co-complex (122,571)
+- High-throughput binary (47,044) 
+- High-throughput co-complex (109,546)
+- Literature-curated binary (14,385) 
+- Literature-curated co-complex (19,746)
+
+### `PathLinker`, http://bioinformatics.cs.vt.edu/~murali/supplements/2016-sys-bio-applications-pathlinker/
+From "Pathways on Demand: Automated Reconstruction of Human Signaling Networks" https://www.nature.com/articles/npjsba20162
+
+Curated collection from http://www.netpath.org/, https://www.cs.tau.ac.il/~spike/, KEGG, http://www.ebi.ac.uk/Tools/webservices/psicquic/view/main.xhtml. 
+
+Data description: The human interactome is a directed graph constructed from a number of sources, as described in the paper. The interactome is a tab-delimited file with four columns: tail node id (UniProtKB), head node id (UniProtKB), edge weight, and evidence for the edge. If multiple evidence types or sources support an edge, a pipe (|) separates. Edges corresponding to physical interactions appear in both directions in the file.
+
+Data download: http://bioinformatics.cs.vt.edu/~murali/supplements/2016-sys-bio-applications-pathlinker/downloads/background-interactome-pathlinker-2015.txt
+
+### `phosphonetworks.org` - kinase-substrate interaction network
+- `data/phosphonetworks` - downloads data (raw/ref/comKSR.csv) from http://www.phosphonetworks.org/download.html, 03-26-2017
+    - `refKSI.csv` - 938 pairs
+

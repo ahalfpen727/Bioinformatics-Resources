@@ -1,0 +1,137 @@
+---
+title: "machine learning to predict exercise manner"
+author: "Ming Tang"
+date: "June 18, 2015"
+output: html_document
+---
+### Introduction 
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Six young health participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. The data for this project come from this [source](http://groupware.les.inf.puc-rio.br/har)
+
+### Download the data and read the data into R
+
+```{r}
+trainingUrl<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingUrl<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(trainingUrl, destfile = "pml-training.csv", method="curl")
+download.file(testingUrl, destfile = "pml-testing.csv", method="curl")
+training<- read.csv("pml-training.csv", stringsAsFactors = F)
+testing<- read.csv("pml-testing.csv", stringsAsFactors = F)
+```
+
+### feature selection, Cross Validation and model buidling 
+
+```{r}
+library(caret)
+set.seed(333)
+# let's look at the data first
+str(training)
+```
+
+**the first column is the entry number, the second column is the user_name. Let's remove them and some other non-sensor columns**  
+
+see discussion on [forum](https://class.coursera.org/predmachlearn-015/forum/thread?thread_id=41)  
+Including the non-sensor columns will give you artifically high accuracy on your model, because they are highly correlated with the classe outcome.
+
+```{r cache=TRUE, warning=FALSE}
+library(dplyr)
+training<- select(training, c(-X,-user_name,-raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window))
+testing<- select(testing, c(-X,-user_name,-raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window))
+
+## turn all the character columns into numeric.
+
+char_col_index<- sapply(training, class) == "character"
+
+char_col<- names(training)[char_col_index]
+char_col
+training<- training %>% mutate_each_(funs(as.numeric), char_col[-34])
+testing<- testing %>% mutate_each_(funs(as.numeric), char_col[-34])
+
+# some variables have no variability at all 
+# these variables are not useful when we want to construct a prediction modewhen the predictor nzv=TRUE, exclude it in the model 
+
+zeroV<- nearZeroVar(training,saveMetrics=TRUE)
+zeroV
+
+## only 118 predictors left
+training<- training[,!zeroV$nzv]
+training$classe <- as.factor(training$classe)
+
+testing<- testing[,!zeroV$nzv]
+
+## remove columns with NAs, most machine-learning algorithm can not deal with NAs, although imputation
+## can help. For simplicity, I just remove columns containing any NAs.
+
+NA_col<- c()
+for (col in names(training)){
+        logic<- any(is.na(training[,col]))
+        NA_col<- c(NA_col,logic)
+}
+
+NA_col 
+
+## only 53 predictors left
+training<- training[,!NA_col]
+
+testing<- testing[,!NA_col]
+
+
+
+### Cross Validation and model buidling 
+# I am going to use K-fold corss validation. 
+# 1. First, I will break training set into K subsets (in this case a 10-fold cross validation)  
+# 2. build the model/predictor on the remaining training data in each subset and applied to the test subset
+# 3. rebuild the data 10 times with the training and test subsets and average the findings
+
+
+
+fitControl<- trainControl( ## 10-fold CV
+                           method="cv",
+                           number = 10)
+
+
+# enable multi-core processing
+library(doParallel)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+
+## fit a model using random forest, it takes 20mins using 4 cpus.
+
+rfFit1<- train(classe ~ ., data=training, method="rf", trControl=fitControl, verbose = FALSE)
+
+rfFit1
+
+stopCluster(cl)
+# The stopCluster is necessary to terminate the extra processes
+
+
+# estimate variable importance
+importance <- varImp(rfFit1, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+
+confusionMatrix(training$classe,predict(rfFit1,training))
+table(prediction=predict(rfFit1, training), training$classe)
+```
+
+### prediction on the testing data set
+
+**in sample error** = error resulted from applying your prediction algorithm to the dataset you built it with also known as resubstitution error.  
+
+**out of sample error** = error resulted from applying your prediction algorithm to a new data set
+also known as generalization error  
+
+The random forest model is very accurate on the training data sets, I expect: 
+**in sample error < out of sample error**  
+reason is over-fitting: model too adapted/optimized for the initial dataset
+
+```{r}
+predict(rfFit1, newdata = testing)
+```
+
+
+
